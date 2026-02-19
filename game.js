@@ -1,84 +1,123 @@
 // goblinsfruits - Phaser.js Game
 
-class MainScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'MainScene' });
+let player, cursors, score = 0, scoreText, gameOver = false;
+let goblins, foods;
+
+function preload() {
+    // Load pixel-art sprites
+    this.load.image('player', 'assets/player.png');
+    this.load.image('goblin', 'assets/goblin.png');
+    this.load.image('banana', 'assets/banana.png');
+    this.load.image('apple', 'assets/apple.png');
+    this.load.image('pineapple', 'assets/pineapple.png');
+}
+
+function create() {
+    // Background
+    this.cameras.main.setBackgroundColor('#1a1a2e');
+
+    // Create groups
+    goblins = this.physics.add.group();
+    foods = this.physics.add.group();
+
+    // Create player
+    player = this.physics.add.sprite(400, 300, 'player');
+    player.setCollideWorldBounds(true);
+    player.setScale(2); // pixel-art vibe
+
+    // Create goblins
+    for (let i = 0; i < 5; i++) {
+        let x = Phaser.Math.Between(50, 750);
+        let y = Phaser.Math.Between(50, 550);
+        let goblin = goblins.create(x, y, 'goblin');
+        goblin.setScale(2);
+        goblin.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(-100, 100));
+        goblin.setBounce(1);
+        goblin.setCollideWorldBounds(true);
     }
 
-    preload() {
-        // Create simple textures programmatically
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        
-        // Player texture (blue square)
-        graphics.fillStyle(0x00d4ff);
-        graphics.fillRect(0, 0, 32, 32);
-        graphics.generateTexture('player', 32, 32);
-        
-        // Platform texture (green rectangle)
-        graphics.clear();
-        graphics.fillStyle(0x00ff88);
-        graphics.fillRect(0, 0, 400, 32);
-        graphics.generateTexture('platform', 400, 32);
-        
-        // Ground texture
-        graphics.clear();
-        graphics.fillStyle(0x333333);
-        graphics.fillRect(0, 0, 800, 64);
-        graphics.generateTexture('ground', 800, 64);
+    // Create food items
+    const foodTypes = ['banana', 'apple', 'pineapple'];
+    for (let i = 0; i < 10; i++) {
+        let x = Phaser.Math.Between(50, 750);
+        let y = Phaser.Math.Between(50, 550);
+        let type = Phaser.Math.RND.pick(foodTypes);
+        let food = foods.create(x, y, type);
+        food.setScale(2);
     }
 
-    create() {
-        // Background
-        this.cameras.main.setBackgroundColor('#1a1a2e');
-        
-        // Create ground
-        this.ground = this.physics.add.staticGroup();
-        this.ground.create(400, 568, 'ground').setScale(1).refreshBody();
-        
-        // Create platforms
-        this.platforms = this.physics.add.staticGroup();
-        this.platforms.create(400, 400, 'platform');
-        this.platforms.create(200, 250, 'platform').setScale(0.5, 1).refreshBody();
-        this.platforms.create(600, 220, 'platform').setScale(0.5, 1).refreshBody();
-        
-        // Create player
-        this.player = this.physics.add.sprite(100, 450, 'player');
-        this.player.setBounce(0.2);
-        this.player.setCollideWorldBounds(true);
-        
-        // Player physics properties
-        this.player.body.setGravityY(300);
-        
-        // Controls
-        this.cursors = this.input.keyboard.createCursorKeys();
-        
-        // Collisions
-        this.physics.add.collider(this.player, this.platforms);
-        this.physics.add.collider(this.player, this.ground);
-        
-        // Instructions text
-        this.add.text(16, 16, 'Arrow keys to move\nUp to jump', {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontFamily: 'Arial'
-        });
+    // WASD controls
+    cursors = this.input.keyboard.addKeys('W,S,A,D');
+
+    // Score
+    scoreText = this.add.text(16, 16, 'Score: 0', {
+        fontSize: '24px',
+        fill: '#ffffff',
+        fontFamily: 'monospace'
+    });
+
+    // Collisions
+    this.physics.add.overlap(player, foods, collectFood, null, this);
+    this.physics.add.overlap(player, goblins, hitGoblin, null, this);
+}
+
+function update() {
+    if (gameOver) return;
+
+    // Player movement (WASD)
+    let speed = 200;
+    if (cursors.A.isDown) {
+        player.setVelocityX(-speed);
+    } else if (cursors.D.isDown) {
+        player.setVelocityX(speed);
+    } else {
+        player.setVelocityX(0);
     }
 
-    update() {
-        // Horizontal movement
-        if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-160);
-        } else if (this.cursors.right.isDown) {
-            this.player.setVelocityX(160);
-        } else {
-            this.player.setVelocityX(0);
+    if (cursors.W.isDown) {
+        player.setVelocityY(-speed);
+    } else if (cursors.S.isDown) {
+        player.setVelocityY(speed);
+    } else {
+        player.setVelocityY(0);
+    }
+
+    // Randomize goblin movement occasionally
+    goblins.children.entries.forEach(goblin => {
+        if (Math.random() < 0.01) {
+            goblin.setVelocity(
+                Phaser.Math.Between(-150, 150),
+                Phaser.Math.Between(-150, 150)
+            );
         }
-        
-        // Jumping
-        if (this.cursors.up.isDown && this.player.body.touching.down) {
-            this.player.setVelocityY(-500);
-        }
+    });
+}
+
+function collectFood(player, food) {
+    food.destroy();
+    score += 10;
+    scoreText.setText('Score: ' + score);
+
+    if (foods.countActive(true) === 0) {
+        // All food collected
+        this.add.text(400, 300, 'YOU WIN!', {
+            fontSize: '64px',
+            fill: '#00ff00',
+            fontFamily: 'monospace'
+        }).setOrigin(0.5);
+        gameOver = true;
     }
+}
+
+function hitGoblin(player, goblin) {
+    this.physics.pause();
+    player.setTint(0xff0000);
+    gameOver = true;
+    this.add.text(400, 300, 'GAME OVER', {
+        fontSize: '64px',
+        fill: '#ff0000',
+        fontFamily: 'monospace'
+    }).setOrigin(0.5);
 }
 
 // Game configuration
@@ -91,11 +130,11 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 500 },
+            gravity: { y: 0 },
             debug: false
         }
     },
-    scene: MainScene
+    scene: { preload, create, update }
 };
 
 // Initialize game
