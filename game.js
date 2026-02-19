@@ -59,6 +59,61 @@ function create() {
     // Collisions
     this.physics.add.overlap(player, foods, collectFood, null, this);
     this.physics.add.overlap(player, goblins, hitGoblin, null, this);
+
+    // Initialize Tone.js audio
+    if (typeof Tone !== 'undefined') {
+        // Master gain at -20 dB
+        const masterGain = new Tone.Gain(-20).toDestination();
+
+        // Background music setup
+        const music = new Tone.Sequence(
+            (time, note) => {
+                const synth = new Tone.PolySynth(Tone.Synth).connect(masterGain);
+                synth.triggerAttackRelease(note, '8n', time);
+            },
+            ['C4', 'E4', 'G4', 'C5', 'G4', 'E4', 'C4', 'A3'],
+            '8n'
+        );
+        music.start(0);
+
+        // Bass line
+        const bass = new Tone.MonoSynth({
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.8 }
+        }).connect(masterGain);
+        const bassPart = new Tone.Sequence(
+            (time, note) => bass.triggerAttackRelease(note, '8n', time),
+            ['C2', 'C2', 'G2', 'C2'],
+            '2n'
+        );
+        bassPart.start(0);
+
+        // Start transport
+        Tone.Transport.bpm.value = 90;
+        Tone.Transport.start();
+
+        // Store audio objects for later use
+        this.sfx = {
+            pickup: () => {
+                const synth = new Tone.Synth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.2 }
+                }).connect(masterGain);
+                synth.triggerAttackRelease('C5', '16n');
+            },
+            gameOver: () => {
+                const synth = new Tone.NoiseSynth({
+                    noise: { type: 'pink' },
+                    envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 }
+                }).connect(masterGain);
+                synth.triggerAttackRelease('8n');
+            },
+            win: () => {
+                const synth = new Tone.PolySynth(Tone.Synth).connect(masterGain);
+                synth.triggerAttackRelease(['C5', 'E5', 'G5'], '4n');
+            }
+        };
+    }
 }
 
 function update() {
@@ -98,6 +153,9 @@ function collectFood(player, food) {
     score += 10;
     scoreText.setText('Score: ' + score);
 
+    // Play pickup sound
+    if (this.sfx && this.sfx.pickup) this.sfx.pickup();
+
     if (foods.countActive(true) === 0) {
         // All food collected
         this.add.text(400, 300, 'YOU WIN!', {
@@ -106,6 +164,7 @@ function collectFood(player, food) {
             fontFamily: 'monospace'
         }).setOrigin(0.5);
         gameOver = true;
+        if (this.sfx && this.sfx.win) this.sfx.win();
     }
 }
 
@@ -118,6 +177,7 @@ function hitGoblin(player, goblin) {
         fill: '#ff0000',
         fontFamily: 'monospace'
     }).setOrigin(0.5);
+    if (this.sfx && this.sfx.gameOver) this.sfx.gameOver();
 }
 
 // Game configuration
